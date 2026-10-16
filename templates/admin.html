@@ -15,6 +15,10 @@
 .bar em{font-style:normal;color:var(--mute);text-align:right}
 .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
 .top select{padding:9px;border-radius:8px;border:1.5px solid var(--line);font:inherit}
+.reset{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:0}
+.reset input{width:150px;padding:9px;border:1px solid var(--line);border-radius:4px;font:inherit}
+.btn.danger{background:var(--bad)}.btn.danger:hover{background:#963733}
+.notice{padding:12px 15px;margin-bottom:14px;border-left:4px solid var(--ok);background:#edf5f0;color:var(--ink)}
 .cm{max-height:320px;overflow:auto}.cm p{margin:0;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.cm small{color:var(--mute);margin-right:6px}
 table.s{width:100%;border-collapse:collapse;font-size:13px}.s td,.s th{padding:7px;border-top:1px solid var(--line);text-align:left}
 </style>
@@ -32,10 +36,21 @@ table.s{width:100%;border-collapse:collapse;font-size:13px}.s td,.s th{padding:7
   <a class="btn" href="{{ url_for('export', cle=key) }}">Exporter en CSV</a></div>
 </div></div>
 <div class="wrap big">
+{% if reset_done %}<div class="notice" role="status">Les réponses ont été réinitialisées.</div>{% endif %}
 <div class="card top"><b>{{ total }} réponse(s)</b>
   <form method="get"><input type="hidden" name="cle" value="{{ key }}">
     <select name="mode" onchange="this.form.submit()"><option value="">Tous les modes de participation</option>
     {% for m in modes %}<option value="{{ m }}" {{ 'selected' if m == flt }}>{{ m }}</option>{% endfor %}</select></form></div>
+<div class="card top">
+  <div><b>Réinitialiser les réponses</b><p class="hint" style="margin:4px 0 0">Cette action efface définitivement toutes les réponses.</p></div>
+  <form class="reset" method="post" action="{{ url_for('reinitialiser') }}">
+    <input type="hidden" name="cle" value="{{ key }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="confirmation">Tapez EFFACER</label>
+    <input id="confirmation" name="confirmation" autocomplete="off" required>
+    <button class="btn danger" type="submit">Réinitialiser les données</button>
+  </form>
+</div>
 
 <div class="grid">
   <div class="kpi"><small>Satisfaction (CSAT)</small><b>{{ csat ~ ' %' if csat is not none else '—' }}</b></div>

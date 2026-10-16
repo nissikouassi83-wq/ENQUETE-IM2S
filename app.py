@@ -1,7 +1,9 @@
 import csv
+import hmac
 import io
 import json
 import os
+import secrets
 import threading
 from datetime import datetime
 from urllib.error import HTTPError, URLError
@@ -142,6 +144,17 @@ def save_row(row):
             w.writerow(row)
 
 
+def clear_rows():
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        supabase_request("DELETE", f"reponses?{urlencode({'id': 'not.is.null'})}")
+        return
+    if os.environ.get("VERCEL") == "1":
+        raise StorageError("Le stockage des réponses n’est pas configuré sur ce serveur.")
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with LOCK, open(CSV_PATH, "w", newline="", encoding="utf-8") as f:
+        csv.DictWriter(f, fieldnames=FIELDS).writeheader()
+
+
 def supabase_request(method, path, payload=None):
     url = f"{SUPABASE_URL}/rest/v1/{path}"
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
@@ -235,7 +248,7 @@ def storage_error(error):
 
 # ------------------------------------------------------------------ dashboard
 def check_key():
-    if request.args.get("cle") != ADMIN_KEY:
+    if request.values.get("cle") != ADMIN_KEY:
         abort(403)
 
 
@@ -307,6 +320,8 @@ def admin():
 
     return render_template(
         "admin.html", key=ADMIN_KEY, flt=flt, modes=Q_MODE, total=len(rows),
+        csrf_token=session.setdefault("admin_csrf", secrets.token_urlsafe(32)),
+        reset_done=request.args.get("reinitialise") == "ok",
         csat=csat_of(rows), nps=nps_of(rows),
         prog_pct=round(100 * len(prog_yes) / len(rows)) if rows else None,
         fdfp_pct=round(100 * sum(1 for r in rows if r.get("q11") == Q_FDFP[1]) / len(rows)) if rows else None,
@@ -319,6 +334,20 @@ def admin():
         prog=dist(rows, "q10", Q_PROG), fdfp=dist(rows, "q11", Q_FDFP),
         comments=comments, titles={k: qmap[k]["label"] for k in comments},
         last=list(reversed(rows))[:15])
+
+
+@app.route("/admin/reinitialiser", methods=["POST"])
+def reinitialiser():
+    check_key()
+    expected_token = session.get("admin_csrf", "")
+    submitted_token = request.form.get("csrf_token", "")
+    if not expected_token or not hmac.compare_digest(expected_token, submitted_token):
+        abort(403)
+    if request.form.get("confirmation") != "EFFACER":
+        abort(400)
+    clear_rows()
+    session.pop("admin_csrf", None)
+    return redirect(url_for("admin", cle=ADMIN_KEY, reinitialise="ok"))
 
 
 @app.route("/admin/export.csv")

@@ -18,6 +18,7 @@ create table public.reponses (
 	created_at timestamptz not null default now(),
 	payload jsonb not null
 );
+grant delete on table public.reponses to service_role;
 ```
 
 Utiliser la clé `service_role` de Supabase uniquement dans les variables d’environnement Vercel; ne jamais l’inclure dans le code du navigateur. Le tableau de bord et l’export CSV lisent également les données depuis Supabase.
