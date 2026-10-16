@@ -2,7 +2,8 @@
 
 - Questionnaire : `/` (5 étapes, 16 questions)
 - Tableau de bord : `/admin/reponses?cle=VOTRE_CLE`
-- Export CSV : `/admin/export.csv?cle=VOTRE_CLE`
+- Export Excel : `/admin/export.xlsx?cle=VOTRE_CLE`
+- Export PDF : `/admin/export.pdf?cle=VOTRE_CLE`
 
 ## Déploiement sur Vercel
 Le point d’entrée serverless est `api/index.py` et `vercel.json` redirige les requêtes vers Flask.

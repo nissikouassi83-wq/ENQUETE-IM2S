@@ -14,6 +14,7 @@
 .bar .t i.n{background:var(--navy2)}
 .bar em{font-style:normal;color:var(--mute);text-align:right}
 .top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.export-actions{display:flex;flex-wrap:wrap;gap:8px}
 .top select{padding:9px;border-radius:8px;border:1.5px solid var(--line);font:inherit}
 .reset{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:0}
 .reset input{width:150px;padding:9px;border:1px solid var(--line);border-radius:4px;font:inherit}
@@ -33,7 +34,10 @@ table.s{width:100%;border-collapse:collapse;font-size:13px}.s td,.s th{padding:7
 <div class="hero"><div class="in">
   <img class="cnps-logo" src="{{ url_for('static', filename='cnps-logo.svg') }}" alt="Logo de la CNPS">
   <div class="top"><div><span class="badge">Tableau de bord</span><h1>Cérémonie IM2S — Catalogue 2027</h1><p>Résultats de l’enquête de satisfaction</p></div>
-  <a class="btn" href="{{ url_for('export', cle=key) }}">Exporter en CSV</a></div>
+  <div class="export-actions">
+    <a class="btn" href="{{ url_for('export_excel', cle=key) }}">Télécharger Excel</a>
+    <a class="btn ghost" href="{{ url_for('export_pdf', cle=key) }}">Télécharger PDF</a>
+  </div></div>
 </div></div>
 <div class="wrap big">
 {% if reset_done %}<div class="notice" role="status">Les réponses ont été réinitialisées.</div>{% endif %}

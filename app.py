@@ -1,4 +1,5 @@
 import csv
+import html
 import hmac
 import io
 import json
@@ -12,6 +13,13 @@ from urllib.request import Request, urlopen
 
 from flask import (Flask, Response, abort, redirect, render_template, request,
                    session, url_for)
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table, TableStyle
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "changez-moi-en-production")
@@ -113,6 +121,19 @@ def all_fields():
 
 
 FIELDS = all_fields()
+
+
+def export_columns():
+    labels = {"date": "Date de réponse"}
+    for step in STEPS:
+        for question in step["questions"]:
+            if question["kind"] == "matrix":
+                labels.update({key: label for key, label, _, _ in question["rows"]})
+            else:
+                labels[question["id"]] = question["label"]
+                if question.get("other"):
+                    labels[question["id"] + "_autre"] = question["label"] + " - précision autre"
+    return [(field, labels.get(field, field)) for field in FIELDS]
 
 
 def load_rows():
@@ -350,16 +371,98 @@ def reinitialiser():
     return redirect(url_for("admin", cle=ADMIN_KEY, reinitialise="ok"))
 
 
-@app.route("/admin/export.csv")
-def export():
+@app.route("/admin/export.xlsx")
+def export_excel():
     check_key()
     rows = load_rows()
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=FIELDS, extrasaction="ignore")
-    w.writeheader()
-    w.writerows(rows)
-    return Response("\ufeff" + buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment; filename=enquete_ceremonie_2027.csv"})
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Réponses"
+    columns = export_columns()
+    sheet.append([label for _, label in columns])
+    for row in rows:
+        sheet.append([excel_value(row.get(field, "")) for field, _ in columns])
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    sheet.row_dimensions[1].height = 48
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="102F48")
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    for column in sheet.columns:
+        width = min(44, max(14, max(len(str(cell.value or "")) for cell in column) + 2))
+        sheet.column_dimensions[column[0].column_letter].width = width
+    for row_cells in sheet.iter_rows(min_row=2):
+        for cell in row_cells:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    output = io.BytesIO()
+    workbook.save(output)
+    return Response(output.getvalue(), mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": "attachment; filename=enquete_ceremonie_2027.xlsx"})
+
+
+def excel_value(value):
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + value
+    return value
+
+
+def pdf_text(value):
+    replacements = str(value or "").translate(str.maketrans({
+        "’": "'", "‘": "'", "“": '"', "”": '"', "–": "-", "—": "-", "·": "-", "…": "..."
+    }))
+    return html.escape(replacements).replace("\n", "<br/>")
+
+
+@app.route("/admin/export.pdf")
+def export_pdf():
+    check_key()
+    rows = load_rows()
+    output = io.BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, rightMargin=15 * mm,
+                                 leftMargin=15 * mm, topMargin=17 * mm, bottomMargin=17 * mm)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("ExportTitle", parent=styles["Title"], textColor=colors.HexColor("#102f48"), alignment=1)
+    section_style = ParagraphStyle("ExportSection", parent=styles["Heading3"], textColor=colors.HexColor("#1b5265"), spaceBefore=8, spaceAfter=4)
+    cell_style = ParagraphStyle("ExportCell", parent=styles["BodyText"], fontSize=8, leading=10)
+    story = [Paragraph("Enquête de satisfaction - Cérémonie IM2S 2027", title_style),
+             Paragraph(f"{len(rows)} réponse(s)", styles["BodyText"])]
+    if not rows:
+        story.append(Paragraph("Aucune réponse enregistrée.", styles["BodyText"]))
+    for index, row in enumerate(rows, 1):
+        if index > 1:
+            story.append(PageBreak())
+        story.append(Paragraph(f"Réponse {index}", styles["Heading2"]))
+        story.append(Paragraph(f"Date : {pdf_text(row.get('date', ''))}", styles["BodyText"]))
+        for step in STEPS:
+            story.append(Paragraph(pdf_text(step["title"]), section_style))
+            data = [[Paragraph("Question", cell_style), Paragraph("Réponse", cell_style)]]
+            for question in step["questions"]:
+                if question["kind"] == "matrix":
+                    entries = [(key, label) for key, label, _, _ in question["rows"]]
+                else:
+                    entries = [(question["id"], question["label"])]
+                for field, label in entries:
+                    data.append([Paragraph(pdf_text(label), cell_style),
+                                 Paragraph(pdf_text(row.get(field, "")) or "-", cell_style)])
+                if question.get("other") and row.get(question["id"] + "_autre"):
+                    data.append([Paragraph("Précision autre", cell_style),
+                                 Paragraph(pdf_text(row[question["id"] + "_autre"]), cell_style)])
+            table = Table(data, colWidths=[66 * mm, 114 * mm], repeatRows=1, splitByRow=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#102f48")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#d9e3df")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+    document.build(story)
+    return Response(output.getvalue(), mimetype="application/pdf",
+                    headers={"Content-Disposition": "attachment; filename=enquete_ceremonie_2027.pdf"})
 
 
 if __name__ == "__main__":
