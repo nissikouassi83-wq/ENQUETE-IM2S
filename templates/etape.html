@@ -9,6 +9,7 @@
 </div></div>
 <div class="wrap">
 <form class="card" method="post" novalidate>
+{% if storage_error %}<p class="err">Vos réponses ne sont pas encore envoyées. Le stockage est indisponible; réessayez plus tard.</p>{% endif %}
 {% if errors %}<p class="err">Merci de répondre aux questions signalées en rouge.</p>{% endif %}
 {% for q in step.questions %}
 <div class="q">

@@ -40,29 +40,40 @@ table.s{width:100%;border-collapse:collapse;font-size:13px}.s td,.s th{padding:7
 <div class="grid">
   <div class="kpi"><small>Satisfaction (CSAT)</small><b>{{ csat ~ ' %' if csat is not none else '—' }}</b></div>
   <div class="kpi"><small>Score NPS</small><b>{{ nps if nps is not none else '—' }}</b></div>
-  <div class="kpi"><small>Comptent programmer en 2027</small><b>{{ prog_pct ~ ' %' if prog_pct is not none else '—' }}</b></div>
-  <div class="kpi"><small>FDFP suite à la cérémonie</small><b>{{ fdfp_pct ~ ' %' if fdfp_pct is not none else '—' }}</b></div>
+  <div class="kpi"><small>Programmer en 2027</small><b>{{ prog_pct ~ ' %' if prog_pct is not none else '—' }}</b></div>
 </div>
 
 <div class="g2">
-<div class="card"><h2>Satisfaction globale (CSAT)</h2>{{ bars(csat_dist) }}</div>
-<div class="card"><h2>Recommandation (NPS)</h2>{{ bars(nps_dist) }}
-  <p class="hint">Promoteurs (9-10) : {{ nps_parts.promo }} · Passifs (7-8) : {{ nps_parts.passif }} · Détracteurs (0-6) : {{ nps_parts.detr }}</p></div>
-<div class="card"><h2>Séquences de la cérémonie <small>(moyenne /4 · % satisfaits)</small></h2>{{ means(seq) }}</div>
-<div class="card"><h2>Organisation et logistique</h2>{{ means(logi) }}</div>
-<div class="card"><h2>Contenu et catalogue (accord)</h2>{{ means(aff) }}</div>
-<div class="card"><h2>Intentions</h2><b style="font-size:13px">Programmer des formations en 2027</b>{{ bars(prog) }}<b style="font-size:13px">Plan de formation FDFP 2027</b>{{ bars(fdfp) }}</div>
-<div class="card"><h2>Profil des participants</h2>{{ bars(roles, 'n') }}</div>
-<div class="card"><h2>Mode, canal et sexe</h2>{{ bars(modes_d) }}<hr style="border:0;border-top:1px solid var(--line)">{{ bars(canaux, 'n') }}<hr style="border:0;border-top:1px solid var(--line)">{{ bars(sexes) }}
-  <table class="s"><tr><th>Sexe</th><th>Réponses</th><th>CSAT</th><th>NPS</th></tr>
-  {% for s in by_sex %}<tr><td>{{ s.label }}</td><td>{{ s.n }}</td><td>{{ s.csat ~ ' %' if s.csat is not none else '—' }}</td><td>{{ s.nps if s.nps is not none else '—' }}</td></tr>{% endfor %}</table></div>
+  <div class="card">
+    <h2>Synthèse générale</h2>
+    {{ bars(csat_dist) }}
+    <hr style="border:0;border-top:1px solid var(--line)">
+    {{ bars(nps_dist) }}
+    <p class="hint">Promoteurs (9-10) : {{ nps_parts.promo }} · Passifs (7-8) : {{ nps_parts.passif }} · Détracteurs (0-6) : {{ nps_parts.detr }}</p>
+  </div>
+  <div class="card">
+    <h2>Commentaires clés</h2>
+    <div class="cm">
+      {% set count = 0 %}
+      {% for k, items in comments.items() %}
+        {% for d, t in items[:3] %}
+          {% set count = count + 1 %}
+          <p><small>{{ d }}</small>{{ t }}</p>
+        {% endfor %}
+      {% endfor %}
+      {% if count == 0 %}
+        <p class="hint">Aucun commentaire.</p>
+      {% endif %}
+    </div>
+  </div>
 </div>
 
-<div class="g2" style="margin-top:18px">
-{% for k, items in comments.items() %}
-<div class="card"><h2>{{ titles[k] }}</h2><div class="cm">
-  {% for d, t in items %}<p><small>{{ d }}</small>{{ t }}</p>{% else %}<p class="hint">Aucun commentaire.</p>{% endfor %}</div></div>
-{% endfor %}
+<div class="card" style="margin-top:18px;">
+  <h2>Intentions principales</h2>
+  <b style="font-size:13px">Programmer des formations en 2027</b>
+  {{ bars(prog) }}
+  <b style="font-size:13px">Plan de formation FDFP 2027</b>
+  {{ bars(fdfp) }}
 </div>
 </div>
 {% endblock %}

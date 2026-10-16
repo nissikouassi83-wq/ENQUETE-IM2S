@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="hero"><div class="in">
+  <img class="cnps-logo" src="{{ url_for('static', filename='cnps-logo.svg') }}" alt="Logo de la CNPS">
+  <h1>Envoi indisponible</h1>
+  <p>{{ message }}</p>
+</div></div>
+<div class="wrap"><div class="card">
+  <p>Vos réponses ne sont pas confirmées comme enregistrées. Revenez au questionnaire et réessayez plus tard.</p>
+  <a class="btn" href="{{ url_for('accueil') }}">Retour à l’accueil</a>
+</div></div>
+{% endblock %}

@@ -1,0 +1,9 @@
+.git/
+.vercel/
+__pycache__/
+.env
+.env.*
+data/*.csv
+reponses_export.csv
+tmp_test_form.py
+export_reponses.py

@@ -1,8 +1,12 @@
 import csv
 import io
+import json
 import os
 import threading
 from datetime import datetime
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from flask import (Flask, Response, abort, redirect, render_template, request,
                    session, url_for)
@@ -13,6 +17,12 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "ceremonie2026")
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
 CSV_PATH = os.path.join(DATA_DIR, "reponses.csv")
 LOCK = threading.Lock()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+
+class StorageError(Exception):
+    pass
 
 SAT4 = ["Très satisfait(e)", "Satisfait(e)", "Insatisfait(e)", "Très insatisfait(e)"]
 AGREE4 = ["Tout à fait d’accord", "Plutôt d’accord", "Plutôt pas d’accord", "Pas du tout d’accord"]
@@ -104,6 +114,12 @@ FIELDS = all_fields()
 
 
 def load_rows():
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        query = urlencode({"select": "payload", "order": "created_at.asc"})
+        records = supabase_request("GET", f"reponses?{query}") or []
+        return [record["payload"] for record in records]
+    if os.environ.get("VERCEL") == "1":
+        raise StorageError("Le stockage des réponses n’est pas configuré sur ce serveur.")
     if not os.path.exists(CSV_PATH):
         return []
     with LOCK, open(CSV_PATH, newline="", encoding="utf-8") as f:
@@ -111,6 +127,11 @@ def load_rows():
 
 
 def save_row(row):
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        supabase_request("POST", "reponses", {"payload": row})
+        return
+    if os.environ.get("VERCEL") == "1":
+        raise StorageError("Le stockage des réponses n’est pas configuré sur ce serveur.")
     os.makedirs(DATA_DIR, exist_ok=True)
     with LOCK:
         new = not os.path.exists(CSV_PATH)
@@ -119,6 +140,28 @@ def save_row(row):
             if new:
                 w.writeheader()
             w.writerow(row)
+
+
+def supabase_request(method, path, payload=None):
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
+    headers = {
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "Accept": "application/json",
+    }
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        headers["Prefer"] = "return=minimal"
+    req = Request(url, data=body, headers=headers, method=method)
+    try:
+        with urlopen(req, timeout=10) as response:
+            result = response.read()
+    except HTTPError as exc:
+        raise StorageError(f"Le stockage des réponses a refusé la requête (HTTP {exc.code}).") from exc
+    except (URLError, TimeoutError) as exc:
+        raise StorageError("Le stockage des réponses est temporairement inaccessible.") from exc
+    return json.loads(result) if result else None
 
 
 # ------------------------------------------------------------------ questionnaire
@@ -167,7 +210,11 @@ def etape(n):
             if n == len(STEPS):
                 row = dict(answers)
                 row["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                save_row(row)
+                try:
+                    save_row(row)
+                except StorageError:
+                    return render_template("etape.html", step=step, n=n, total=len(STEPS),
+                                           a=answers, errors=errors, storage_error=True), 503
                 session.clear()
                 return redirect(url_for("merci"))
             return redirect(url_for("etape", n=n + 1))
@@ -179,6 +226,11 @@ def etape(n):
 @app.route("/merci")
 def merci():
     return render_template("merci.html")
+
+
+@app.errorhandler(StorageError)
+def storage_error(error):
+    return render_template("erreur_stockage.html", message=str(error)), 503
 
 
 # ------------------------------------------------------------------ dashboard
